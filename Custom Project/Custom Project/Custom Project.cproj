@@ -122,7 +122,31 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="ADC_C.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="ADC_H.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="main.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="nokia5110.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="nokia5110.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="nokia5110_chars.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="nokia_bitmaps.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="WS2812.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="WS2812.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
