@@ -16,6 +16,6 @@
 #define iport PORTA
 
 void ADC_Init();
-int ADC_Read(char);
+unsigned short ADC_Read(unsigned char channel);
 
 #endif /* ADC_H_H_ */

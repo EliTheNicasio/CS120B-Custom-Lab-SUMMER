@@ -11,6 +11,7 @@
 #include <avr/interrupt.h>
 #include "WS2812.h"
 #include "ADC_H.h"
+#include "nokia5110.h"
 
 // Concurrent SM Stuff
 typedef struct
@@ -23,18 +24,23 @@ typedef struct
 
 const unsigned long tasksPeriod = 50;
 
-#define tasksSize 1
+#define tasksSize 5
 Task tasks[tasksSize];
 
 enum IN_States {IN_Start, IN_Cycle} IN_State;
 int TickFct_Input(int state);
 
-enum CN_States {CN_Start, CN_Idle, CN_Move, CN_MoveWait} CN_State;
+enum CN_States {CN_Start, CN_Init, CN_Idle, CN_Move, CN_MoveWait} CN_State;
 int TickFct_Controller(int state);
+
+enum AN_States {AN_Start, AN_Init, AN_FallingIntro, AN_BlinkCursor} AN_State;
+int TickFct_Animate(int state);
 
 enum LED_States {LED_Start, LED_Init, LED_Cycle} LED_State;
 int TickFct_LED(int state);
 
+enum NK_States {NK_Start, NK_Init, NK_Countdown, NK_Finish} NK_State;
+int TickFct_Nokia(int state);
 
 // Synch SM Vars and Functions
 #pragma region
@@ -105,6 +111,8 @@ void TimerSet(unsigned long M) {
 }
 #pragma endregion
 
+enum GemColor {GC_Red, GC_Blue, GC_Green, GC_Yellow};
+
 typedef struct 
 {
 	unsigned char green;
@@ -114,31 +122,93 @@ typedef struct
 
 LED LEDs[64]; 
 
+LED Gems[64];
+	
+void setGemColor(unsigned char i, int color)
+{
+	switch(color)
+	{
+		case GC_Red:
+			Gems[i].green = 0;
+			Gems[i].red = 2;
+			Gems[i].blue = 0;
+			break;
+			
+		case GC_Blue:
+			Gems[i].green = 0;
+			Gems[i].red = 0;
+			Gems[i].blue = 2;
+			break;
+			
+		case GC_Green:
+			Gems[i].green = 2;
+			Gems[i].red = 0;
+			Gems[i].blue = 0;
+			break;
+			
+		case GC_Yellow:
+			Gems[i].green = 2;
+			Gems[i].red = 2;
+			Gems[i].blue = 0;
+			break;
+			
+		default:
+			break;
+	}
+}
+
+typedef struct 
+{
+	unsigned char xIndex;
+	unsigned char yIndex;
+} Cursor;
+
+Cursor cursor;
+
+unsigned char checkMatch();
+
 int main(void)
 {
 	DDRA = 0x00; PORTA = 0xFF;
 	DDRB = 0xFF; PORTB = 0x00;
+	DDRC = 0xFF; PORTC = 0x00;
 	
 	unsigned char i = 0;
-	/*tasks[i].state = IN_Start;
+	tasks[i].state = IN_Start;
 	tasks[i].period = 50;
 	tasks[i].elapsedTime = 0;
 	tasks[i].TickFct = &TickFct_Input;
 	i++;
 	tasks[i].state = CN_Start;
-	tasks[i].period = 50;
+	tasks[i].period = 200;
 	tasks[i].elapsedTime = 0;
 	tasks[i].TickFct = &TickFct_Controller;
-	i++;*/
+	i++;
+	tasks[i].state = NK_Start;
+	tasks[i].period = 15000;
+	tasks[i].elapsedTime = 0;
+	tasks[i].TickFct = &TickFct_Nokia;
+	i++;
+	tasks[i].state = AN_Start;
+	tasks[i].period = 2500;
+	tasks[i].elapsedTime = 0;
+	tasks[i].TickFct = &TickFct_Animate;
+	i++;
 	tasks[i].state = LED_Start;
-	tasks[i].period = 100;
+	tasks[i].period = 200;
 	tasks[i].elapsedTime = 0;
 	tasks[i].TickFct = &TickFct_LED;
+	
+
+	ADC_Init();
 	
 	TimerSet(1);
 	TimerOn();
 	
+	nokia_lcd_init();
+	
 	initMatrix();
+	setAllLEDs(0, 2, 0);
 	
 	srand(time(0));
 	
@@ -152,8 +222,8 @@ int main(void)
 unsigned short ADC_X;
 unsigned short ADC_Y;
 
-#define analog_X 0
-#define analog_Y 1
+#define analog_X 0x00
+#define analog_Y 0x01
 
 int TickFct_Input(int state)
 {
@@ -190,12 +260,17 @@ enum Direction {North, NorthEast, East, SouthEast, South, SouthWest, West, North
 
 unsigned char stickMoved(unsigned short x, unsigned short y);
 int getDirection(unsigned short x, unsigned short y);
+void moveCursor(int dir);
 
 int TickFct_Controller(int state)
 {
 	switch(state)
 	{
 		case CN_Start:
+			state = CN_Init;
+			break;
+			
+		case CN_Init:
 			state = CN_Idle;
 			break;
 			
@@ -203,6 +278,7 @@ int TickFct_Controller(int state)
 			if(stickMoved(ADC_X, ADC_Y))
 			{
 				state = CN_Move;
+				moveDir = getDirection(ADC_X, ADC_Y);
 			}
 			else
 			{
@@ -215,11 +291,55 @@ int TickFct_Controller(int state)
 			break;
 		
 		case CN_MoveWait:
-			if(stickMoved(ADC_X, ADC_Y))
+		/*	if(moveDir != getDirection(ADC_X, ADC_Y))
+			{
+				state = CN_Move;
+			}
+			else */if(!stickMoved(ADC_X, ADC_Y))
+			{
+				state = CN_Idle;
+			}
+			else
 			{
 				state = CN_MoveWait;
 			}
-		
+			break;
+			
+		default:
+			state = CN_Start;
+			break;
+	}
+	switch(state)
+	{
+		case CN_Start:
+			break;
+			
+		case CN_Init:
+			cursor.xIndex = 0;
+			cursor.yIndex = 0;
+			break;
+			
+		case CN_Idle:
+			/*if(stickMoved(ADC_X, ADC_Y))
+			{
+				LEDs[63].green = 0;
+				LEDs[63].red = 0;
+				LEDs[63].blue = 2;
+			}
+			else
+			{
+				LEDs[63].green = 0;
+				LEDs[63].red = 2;
+				LEDs[63].blue = 0;
+			}*/
+			break;
+			
+		case CN_Move:
+			moveCursor(moveDir);
+			break;
+			
+		case CN_MoveWait:
+			break;
 	}
 	return state;
 }
@@ -240,17 +360,204 @@ unsigned char stickMoved(unsigned short x, unsigned short y)
 	}
 }
 
+#define up y > 0x0300
+#define down y < 0x0100
+#define neutralY y < 0x0300 && y > 0x0100
+#define right x < 0x0100
+#define left x > 0x0300
+#define neutralX x < 0x0300 && x > 0x0100
+
 int getDirection(unsigned short x, unsigned short y)
 {
-	if(x > 0x0300 && y < 0x0100)
+	if(up && left)
 	{
 		return NorthWest;
 	}
-	else if(x > 0x0300 && y > 0x0100 && y < 0x0300)
+	else if(up && neutralX)
 	{
 		return North;
 	}
-	//else if( x > 0x0300)
+	else if(up && right)
+	{
+		return NorthEast;
+	}
+	else if (left && neutralY)
+	{
+		return West;
+	}
+	else if(right && neutralY)
+	{
+		return East;
+	}
+	else if(left && down)
+	{
+		return SouthWest;
+	}
+	else if(down && neutralX)
+	{
+		return South;
+	}
+	else if(down && right)
+	{
+		return SouthEast;
+	}
+	else
+	{
+		return INVALID;
+	}
+}
+
+unsigned char blinkCursor;
+
+void moveCursor(int dir)
+{
+//	blinkCursor = 1;
+	
+	switch(dir)
+	{
+		case North:
+			if(cursor.yIndex > 0)
+			{
+				cursor.yIndex--;
+			}
+			break;
+			
+		case NorthEast:
+			if(cursor.yIndex > 0 && cursor.xIndex < 7)
+			{
+				cursor.xIndex++;
+				cursor.yIndex--;
+			}
+			break;
+			
+		case East:
+			if(cursor.xIndex < 7)
+			{
+				cursor.xIndex++;
+			}
+			break;
+			
+		case SouthEast:
+			if(cursor.xIndex < 7 && cursor.yIndex < 7)
+			{
+				cursor.xIndex++;
+				cursor.yIndex++;
+			}
+			break;
+			
+		case South:
+			if(cursor.yIndex < 7)
+			{
+				cursor.yIndex++;
+			}
+			break;
+			
+		case SouthWest:
+			if(cursor.yIndex < 7 && cursor.xIndex > 0)
+			{
+				cursor.yIndex++;
+				cursor.xIndex--;
+			}
+			break;
+			
+		case West:
+			if(cursor.xIndex > 0)
+			{
+				cursor.xIndex--;
+			}
+			break;
+			
+		case NorthWest:
+			if(cursor.xIndex > 0 && cursor.yIndex > 0)
+			{
+				cursor.xIndex--;
+				cursor.yIndex--;
+			}
+			break;
+			
+		default:
+			break;
+	}
+}
+
+// Blink Cursor
+
+unsigned char getCursorIndex();
+
+int TickFct_Animate(int state)
+{
+	static unsigned int i;
+	switch(state)
+	{
+		case AN_Start:
+			state = AN_Init;
+			break;
+			
+		case AN_Init:
+			state = AN_FallingIntro;
+			i = 0;
+			break;
+			
+		case AN_FallingIntro:
+			if(i < 8)
+			{
+				state = AN_FallingIntro;
+			}
+			else
+			{
+				state = AN_BlinkCursor;
+			}
+
+			break;
+			
+		case AN_BlinkCursor:
+			state = AN_BlinkCursor;
+			break;
+			
+		default:
+			state = AN_Start;
+			break;
+	}
+	switch(state)
+	{
+		case AN_Start:
+			break;
+			
+		case AN_Init:
+			blinkCursor = 0;
+			break;
+			
+		case AN_FallingIntro:
+			for(unsigned char j = 0; j < 64; j++)
+			{
+				if(j >= (8 * (7 - i)))
+				{
+					LEDs[j].green = Gems[((i + 1) * 8) - 1 - (63 - j)].green;
+					LEDs[j].red = Gems[((i + 1) * 8) - 1 - (63 - j)].red;
+					LEDs[j].blue = Gems[((i + 1) * 8) - 1 - (63 - j)].blue;
+				}
+				else
+				{
+					LEDs[j].green = 0;
+					LEDs[j].red = 0;
+					LEDs[j].blue = 0;
+				}
+			}
+			i++;
+			break;
+			
+		case AN_BlinkCursor:
+			//blinkCursor = blinkCursor ? 0 : 1;
+			for(unsigned char j = 0; j < 64; j++)
+			{
+				LEDs[j].green = Gems[j].green;
+				LEDs[j].red = Gems[j].red;
+				LEDs[j].blue = Gems[j].blue;
+			}
+			blinkCursor = 1;
+			break;
+	}
+	return state;
 }
 
 // LEDs
@@ -288,7 +595,18 @@ int TickFct_LED(int state)
 		case LED_Cycle:
 			for(unsigned char i = 0; i < 64; i++)
 			{
-				setLED(i, LEDs[1].green, LEDs[i].red, LEDs[i].blue);
+				if(i != getCursorIndex())
+				{
+					setLED(i, LEDs[i].green, LEDs[i].blue, LEDs[i].red);	
+				}
+			}
+			if(blinkCursor)
+			{
+				setLED(getCursorIndex(), 5, 5, 5);
+			}
+			else
+			{
+				setLED(getCursorIndex(), LEDs[getCursorIndex()].green, LEDs[getCursorIndex()].blue, LEDs[getCursorIndex()].red);
 			}
 			cycle();
 			break;
@@ -300,35 +618,97 @@ void initLEDs()
 {
 	for(unsigned char i = 0; i < 64; i++)
 	{
-		LEDs[i].green = 1;
-		LEDs[i].red = 1;
-		LEDs[i].blue = 1;
+		setGemColor(i, rand() % 4);
 	}
-	for(unsigned char i = 0; i < 4; i++)
+}
+
+unsigned char checkMatch()
+{
+	unsigned char g1 = 0, g2 = 0, g3 = 0;
+	for(unsigned char i = 0; i < 62; i++)
 	{
-		LEDs[i + 18].green = 2;
-		LEDs[i + 18].red = 0;
-		LEDs[i + 18].blue = 0;
+		
 	}
-	for(unsigned char i = 0; i < 4; i++)
+	
+	return g1;
+}
+
+// Specifically for LED function, converts 2 indices to 1
+unsigned char getCursorIndex()
+{
+	return cursor.xIndex + (cursor.yIndex * 8);
+}
+
+// Nokia
+
+unsigned char countdown;
+unsigned char strOut[2];
+
+int TickFct_Nokia(int state)
+{
+	switch(state)
 	{
-		LEDs[i + 42].green = 2;
-		LEDs[i + 42].red = 0;
-		LEDs[i + 42].blue = 0;
+		case NK_Start:
+			state = NK_Init;
+			break;
+			
+		case NK_Init:
+			state = NK_Countdown;
+			countdown = 60;
+			break;
+			
+		case NK_Countdown:
+			if(countdown > 0)
+			{
+				state = NK_Countdown;
+				countdown--;
+			}
+			else
+			{
+				state = NK_Finish;
+			}
+			break;
+			
+		case NK_Finish:
+			state = NK_Finish;
+			break;
+			
+		default:
+			break;
 	}
-	LEDs[26].green = 2;
-	LEDs[26].red = 0;
-	LEDs[26].blue = 0;
+	switch(state)
+	{
+		case NK_Start:
+			nokia_lcd_clear();
+			nokia_lcd_set_cursor(1,1);
+			nokia_lcd_write_string("Start", 2);
+			break;
+			
+		case NK_Init:
+			strOut[0] = 'Z';
+			strOut[1] = ' ';
+			nokia_lcd_clear();
+			nokia_lcd_set_cursor(1,1);
+			nokia_lcd_write_string("Init", 2);
+			break;
+			
+		case NK_Countdown:
+			strOut[0] = 48 + (countdown / 10);
+			strOut[1] = 48 + (countdown % 10);
+			
+			nokia_lcd_clear();
+			nokia_lcd_set_cursor(1,1);
+			nokia_lcd_write_string(strOut, 2);
+			break;
+			
+		case NK_Finish:
+			nokia_lcd_clear();
+			nokia_lcd_set_cursor(1,1);
+			nokia_lcd_write_string("Finish!", 2);		
+			break;
+	}
 	
-	LEDs[34].green = 2;
-	LEDs[34].red = 0;
-	LEDs[34].blue = 0;
+	nokia_lcd_render();
 	
-	LEDs[29].green = 2;
-	LEDs[29].red = 0;
-	LEDs[29].blue = 0;
-	
-	LEDs[37].green = 2;
-	LEDs[37].red = 0;
-	LEDs[37].blue = 0;
+	return state;
 }
