@@ -11,6 +11,9 @@
  * Original library written by SkewPL, http://skew.tk
  *
  * https://github.com/LittleBuster/avr-nokia5110
+ *
+ * Modified by Elijah Nicasio. Driver for all nokia related functions.
+ */
  */
 
 #ifndef __NOKIA_5110_H__
@@ -74,6 +77,9 @@ void nokia_lcd_write_char(char code, uint8_t scale);
  * @scale: size of text
  */
 void nokia_lcd_write_string(const char *str, uint8_t scale);
+
+// Written by Elijah Nicasio
+void nokia_lcd_write_string_with_size(const char *str, uint8_t scale, unsigned char strSize);
 
 /**
  * Set cursor position

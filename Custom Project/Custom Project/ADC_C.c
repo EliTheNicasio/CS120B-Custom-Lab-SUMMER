@@ -2,11 +2,16 @@
  * ADC_C.c
  *
  * Created: 7/28/2016 4:56:54 PM
- *  Author: http://www.electronicwings.com/avr-atmega/analog-joystick-interface-with-atmega-16-32
+ *  Author: Unlisted, code found on the following site:
+ *	http://www.electronicwings.com/avr-atmega/analog-joystick-interface-with-atmega-16-32,
+ *	and then modified by Elijah Nicasio.
+ *	Description: Drives ADC. Inputs are the vertical and horizontal directions of the analog stick.
+ *	To receive ADC value, use ADC_Read function and pass channel of direction to read.
  */ 
 
 #include "ADC_H.h"
 
+// Initialize ADC, pass proper flags
 void ADC_Init()
 {
 	//DDRA = 0x00;		/* Make ADC port as input */
@@ -16,6 +21,7 @@ void ADC_Init()
 	ADCSRA |= (1 << ADEN) | (1 << ADSC);
 }
 
+// Read value on ADC. Passing 0 returns horizontal value, 1 returns vertical value
 unsigned short ADC_Read(unsigned char channel)
 {
 	//unsigned short ADC_value;

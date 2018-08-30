@@ -3,7 +3,9 @@
  *
  *  Author: User bianchi77 on forum avrfreaks.net, modified by Elijah Nicasio
  *  URL: https://www.avrfreaks.net/forum/tiny85-pwm-125-micro-second
- */ 
+ *
+ *  Functions to get correct timings and display lights on 8x8 NeoPixel
+ */
 
 
 #ifndef WS2812_H_

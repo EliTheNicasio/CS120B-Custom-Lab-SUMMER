@@ -1,9 +1,14 @@
 /*
  * ADC_H.h
  *
- * Created: 7/28/2016 4:50:16 PM
- *  Author: http://www.electronicwings.com/avr-atmega/analog-joystick-interface-with-atmega-16-32
- */ 
+ * Created: 7/28/2016 4:56:54 PM
+ *  Author: Unlisted, code found on the following site:
+ *	http://www.electronicwings.com/avr-atmega/analog-joystick-interface-with-atmega-16-32,
+ *	and then modified by Elijah Nicasio.
+ *	Description: Drives ADC. Inputs are the vertical and horizontal directions of the analog stick.
+ *	To receive ADC value, use ADC_Read function and pass channel of direction to read.
+ */
+
 
 
 #ifndef ADC_H_H_
