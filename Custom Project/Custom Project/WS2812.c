@@ -3,6 +3,8 @@
  *
  *  Author: User bianchi77 on forum avrfreaks.net, modified by Elijah Nicasio
  *  URL: https://www.avrfreaks.net/forum/tiny85-pwm-125-micro-second
+ *  
+ *  To get running, use functions initMatrix(), setLed(), and cycle().
  *
  * Functions to get correct timings and display lights on 8x8 NeoPixel 
  */ 
@@ -27,6 +29,8 @@ unsigned char g[64], r[64], b[64];
 
 void RES();
 
+// initializes matrix, must be run first. This is for an 8x8 matrix. Change 
+// for loop and char arrays above (g, r, and b) to intialize for larger matrix
 void initMatrix()
 {
 	for(unsigned char i = 0;i < 64;++i)
@@ -37,6 +41,7 @@ void initMatrix()
 	}
 }
 
+// Set LED at index to rgb values (ordered grb for some reason)
 void setLED(unsigned char index, unsigned char green, unsigned char red, unsigned char blue)
 {
 	g[index] = green;
@@ -44,6 +49,7 @@ void setLED(unsigned char index, unsigned char green, unsigned char red, unsigne
 	b[index] = blue;
 }
 
+// Set all LEDs to rgb values
 void setAllLEDs(unsigned char green, unsigned char red, unsigned char blue)
 {
 	for(unsigned char i = 0; i < 64; ++i)
@@ -64,6 +70,8 @@ void send(unsigned char b){
 	}
 }
 
+// Cycle through and light up LEDs. Function must be called constantly 
+// for LEDs to light up continuously
 void cycle()
 {
 	//calls send 64 times
@@ -98,9 +106,4 @@ void RES()
 {
 	TOff(); delnus(55);
 	//_delay_us(55);
-}
-
-unsigned char getBit(unsigned char bit, unsigned char x)
-{
-	return (x >> bit) & 0x01;
 }
